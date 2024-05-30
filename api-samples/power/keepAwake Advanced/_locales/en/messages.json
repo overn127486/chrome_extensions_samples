@@ -23,9 +23,13 @@
     "message": " until: ",
     "description": "Suffix to append to above Titles to append an end time"
   },
-  "autoDisableText": {
+  "autoDisableAfterText": {
     "message": "Automatically disable after:",
     "description": "Text labelling a slider allowing setting a timeout for disabling the power saving state."
+  },
+  "autoDisableAtText": {
+    "message": "Automatically disable at: ",
+    "description": "Prefix Text indicating the time when the state will automatically switch to disabled."
   },
   "autoDisableHoursSuffix": {
     "message": "h",

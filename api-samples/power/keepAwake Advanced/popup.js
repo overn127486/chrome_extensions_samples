@@ -16,6 +16,8 @@
 
 import { DURATION_FOR_EVER, getSavedMode, StateEnum } from './common.js';
 
+/** @typedef {import('./common.js').KeepAwakeMode} KeepAwakeMode */
+
 /** @type {HTMLLabelElement} */
 let durationLabel;
 /** @type {HTMLInputElement} */
@@ -55,17 +57,20 @@ function updateDurationLabel() {
 async function durationSliderChanged() {
   updateDurationLabel();
 
-  await sendMessageToBackground(
+  const newState = await sendMessageToBackground(
     (await getSavedMode()).state,
     Number(durationSlider.value)
   );
+  updateState(newState);
 }
 
 /**
  * Sends a message to the background service worker to set the new state and
  * duration.
+ *
  * @param {string} state
  * @param {number} duration
+ * @return {Promise<KeepAwakeMode>} Updated mode
  */
 async function sendMessageToBackground(state, duration) {
   if (!Object.values(StateEnum).includes(state)) {
@@ -79,8 +84,7 @@ async function sendMessageToBackground(state, duration) {
   } else {
     message.duration = duration;
   }
-
-  chrome.runtime.sendMessage(message);
+  return await chrome.runtime.sendMessage(message);
 }
 
 /**
@@ -93,14 +97,37 @@ async function sendMessageToBackground(state, duration) {
  */
 async function buttonClicked(e) {
   const button = /** @type {HTMLElement} */ (e.currentTarget);
-  await sendMessageToBackground(
+  const newState = await sendMessageToBackground(
     // Button id is named after state.
     button.id,
     Number(durationSlider.value)
   );
+  updateState(newState);
+}
+
+/**
+ * @param {KeepAwakeMode} newMode
+ */
+
+function updateState(newMode) {
+  console.log('new state: %o', newMode);
+  if (!newMode) {
+    throw new Error('invalid null state');
+  }
   // Re-set active button state.
   document.querySelector(`#buttons .active`)?.classList?.remove('active');
-  button.classList.add('active');
+  querySelectorAndAssert(`#buttons #${newMode.state}`).classList?.add('active');
+  if (newMode.state === StateEnum.DISABLED || !newMode.endMillis) {
+    querySelectorAndAssert('#autodisable-text').textContent =
+      chrome.i18n.getMessage('autoDisableAfterText');
+  } else {
+    querySelectorAndAssert('#autodisable-text').textContent =
+      chrome.i18n.getMessage('autoDisableAtText') +
+      new Date(newMode.endMillis).toLocaleTimeString(undefined, {
+        timeStyle: 'short'
+      });
+  }
+  updateDurationLabel();
 }
 
 /**
@@ -118,8 +145,8 @@ async function onload() {
 
   querySelectorAndAssert('#title').textContent =
     chrome.i18n.getMessage('extensionName');
-  querySelectorAndAssert('#autodisable-text').title =
-    chrome.i18n.getMessage('autoDisableText');
+
+  const mode = await getSavedMode();
 
   // set button titles and listeners
   for (const id of Object.values(StateEnum)) {
@@ -130,16 +157,12 @@ async function onload() {
       chrome.i18n.getMessage(button.id + 'Label');
   }
 
-  // set active button state. Assumes buttons have same IDs as state names.
-  const mode = await getSavedMode();
-  querySelectorAndAssert(`#buttons #${mode.state}`).classList?.add('active');
-
   durationSlider.max = DURATION_FOR_EVER.toString();
   durationSlider.value = (
     mode.defaultDurationHrs ? mode.defaultDurationHrs : DURATION_FOR_EVER
   ).toString();
-  updateDurationLabel();
   durationSlider.addEventListener('input', durationSliderChanged);
+  updateState(mode);
 }
 
 document.addEventListener('DOMContentLoaded', onload);

@@ -72,10 +72,10 @@ function updateState(mode) {
     chrome.action.setBadgeText({ text: `${hoursLeft}h` });
     const endDate = new Date(mode.endMillis);
     chrome.action.setTitle({
-      title: `${title}${chrome.i18n.getMessage('untilText')} ${endDate.toLocaleTimeString('short')}`
+      title: `${title}${chrome.i18n.getMessage('untilText')} ${endDate.toLocaleTimeString(undefined, { timeStyle: 'short' })}`
     });
     log(
-      `mode = ${mode.state} for the next ${hoursLeft}hrs until ${endDate.toLocaleTimeString('short')}`
+      `mode = ${mode.state} for the next ${hoursLeft}hrs until ${endDate.toLocaleTimeString()}`
     );
   } else {
     // No timeout.
@@ -86,9 +86,11 @@ function updateState(mode) {
 }
 
 /**
+ *
  * Apply a new KeepAwake mode.
  *
  * @param {KeepAwakeMode} newMode
+ * @return {Promise<KeepAwakeMode>}
  */
 async function setNewMode(newMode) {
   // Clear any old alarms
@@ -110,6 +112,7 @@ async function setNewMode(newMode) {
   // Store the new mode.
   chrome.storage.local.set(newMode);
   updateState(newMode);
+  return newMode;
 }
 
 /**
@@ -197,7 +200,6 @@ chrome.runtime.onMessage.addListener(function (request, _, sendResponse) {
     request.state,
     request.duration
   );
-  sendResponse({});
 
   setNewMode(
     verifyMode({
@@ -205,7 +207,13 @@ chrome.runtime.onMessage.addListener(function (request, _, sendResponse) {
       defaultDurationHrs: request.duration,
       endMillis: null
     })
-  );
+  )
+    .then((newMode) => sendResponse(newMode))
+    .catch((e) => {
+      log(`failed to set new mode: ${e}`, e);
+      sendResponse(null);
+    });
+  return true; // sendResponse() called asynchronously
 });
 
 // Handle action clicks - rotates the mode to the next mode.
